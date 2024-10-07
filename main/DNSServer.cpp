@@ -32,8 +32,10 @@ DNSServer::DNSServer() {
 }
 
 
-bool DNSServer::start(const uint16_t port, IPAddress &upstream_doh) {
-  _upstream_doh = upstream_doh;
+bool DNSServer::start(const uint16_t port, IPAddress &upstream_coap_server, uint16_t upstream_coap_port) {
+  _upstream_coap_server = upstream_coap_server;
+  _upstream_coap_port = upstream_coap_port;
+
   if (_udp.listen(port)) {
     _udp.onPacket(
       [&](AsyncUDPPacket &packet) {
@@ -174,7 +176,7 @@ void DNSServer::replyWithCustomCode(AsyncUDPPacket &packet, DNSReplyCode replyCo
 }
 
 void DNSServer::askServerForIp(AsyncUDPPacket &packet, String url, size_t &_qnameLength) {
-  uint16_t msgid = _coap->put(_upstream_doh, COAP_SERVER_PORT, "ip", url.c_str());
+  uint16_t msgid = _coap->put(_upstream_coap_server, _upstream_coap_port, "ip", url.c_str());
   
   // DNS Header + qname + Type +  Class + qnamePointer  + TYPE + CLASS + TTL + Datalength ) IP
   // sizeof(DNSHeader) + _qnameLength  + 2*SIZECLASS +2*SIZETYPE + sizeof(_ttl) + DATLENTHG + sizeof(_resolvedIP)

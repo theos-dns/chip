@@ -108,8 +108,23 @@
 </h3>
 <div style='width: 90%;margin-bottom: 100px'>
     <div class='content-center-row space-x-4' style='margin-bottom: 10px'>
-        <label for='server_ip'>Server IP:</label>
-        <input id='server_ip' type='text' placeholder='111.111.111.111' required>
+        <label for='share_link'>Share Link:</label>
+        <input id='share_link' type='text'>
+    </div>
+
+    <button class='button' onclick='onParseLink()'>parse link</button>
+
+    <div class='content-center-row space-x-4' style='margin-bottom: 10px'>
+        <label for='auth_server'>Auth Server:</label>
+        <input id='auth_server' type='text' placeholder='111.111.111.111:82' required>
+    </div>
+    <div class='content-center-row space-x-4' style='margin-bottom: 10px'>
+        <label for='whoami_server'>Whoami Server:</label>
+        <input id='whoami_server' type='text' placeholder='111.111.111.111:81' required>
+    </div>
+    <div class='content-center-row space-x-4' style='margin-bottom: 10px'>
+        <label for='coap_server'>COAP Server:</label>
+        <input id='coap_server' type='text' placeholder='111.111.111.111:85' required>
     </div>
 
     <div class='content-center-row space-x-4' style='margin-bottom: 10px'>
@@ -131,9 +146,21 @@
 
 
 <script>
+    function onParseLink(){
+        [
+            document.getElementById('auth_server').value,
+            document.getElementById('whoami_server').value,
+            document.getElementById('coap_server').value,
+            document.getElementById('token').value,
+            document.getElementById('wifi_ssid').value,
+            document.getElementById('wifi_password').value
+        ] = document.getElementById('share_link').value.split('@#@')
+    }
     function onSubmit() {
         let formData = new FormData();
-        formData.append('serverIp', document.getElementById('server_ip').value);
+        formData.append('serverAuth', document.getElementById('auth_server').value);
+        formData.append('serverWhoami', document.getElementById('whoami_server').value);
+        formData.append('serverCoap', document.getElementById('coap_server').value);
         formData.append('token', document.getElementById('token').value);
         formData.append('ssid', document.getElementById('wifi_ssid').value);
         formData.append('password', document.getElementById('wifi_password').value);

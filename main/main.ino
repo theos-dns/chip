@@ -20,22 +20,19 @@ const char *AP_password = "123654789";
 bool IS_CONNECTED_TO_WIFI = false;
 
 struct {
-  char WIFI_ssid[32] = "";
+  char WIFI_ssid[32]     = "";
   char WIFI_password[32] = "";
-  char token[32] = "";
-  char server_ip[32] = "";  // with port of https dns server, example: 10.10.10.10:1443
-  char are_data_ok[3] = "ok";
+  char token[32]         = "";
+  char server_auth[32]   = "";  // with port, example: 10.10.10.10:82
+  char server_whoami[32] = "";  // with port, example: 10.10.10.10:81
+  char server_coap[32]   = "";  // with port, example: 10.10.10.10:85
+  char are_data_ok[3]    = "ok";
 } _settings;
 
 #define RESET_PIN 19
 
 
-IPAddress _serverIp;
-
 DNSServer _dnsServer;
-
-const char *_serverAuthPort = "8005";
-const char *_serverIpAskPort = "1234";
 
 IPAddress _lastClinetIp;
 
@@ -49,24 +46,15 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 WebServer _server(80);
 
 void show_splash_screen();
-
 void show_wifi_details();
-
 void show_dns_server_address(String ipAddress);
-
 void show_token_is_invalid();
 
 void handle_index();
-
 void handle_saveSettings();
-
 void handle_notFound();
 
-
 bool has_wifi_or_connect();
-
-
-char *prepareServerName(const char *port);
 
 IPAddress localIp();
 
@@ -93,7 +81,14 @@ void setup() {
   unsigned int addr = 0;
   EEPROM.get(addr, _settings);
 
-  Serial.println(_settings.server_ip);
+  Serial.println("auth server: ");
+  Serial.println(_settings.server_auth);
+
+  Serial.println("whoami server: ");
+  Serial.println(_settings.server_whoami);
+
+  Serial.println("coap server: ");
+  Serial.println(_settings.server_coap);
 
   if (!has_wifi_or_connect()) {
     show_wifi_details();
@@ -117,13 +112,20 @@ void setup() {
 
   } else {
     Serial.println("wifi founded");
+    IPAddress coapServer;
+    uint16_t coapPort;
 
-    String serverDnsAddress = String(_settings.server_ip);
-    String serverIp = serverDnsAddress.substring(0, serverDnsAddress.indexOf(":"));
-    _serverIp.fromString(serverIp);
+    String serverCoap = String(_settings.server_coap);
+
+    coapServer.fromString(serverCoap.substring(0, serverCoap.indexOf(":")));
+    coapPort = atoi(serverCoap.substring(serverCoap.indexOf(":")+1, serverCoap.length()).c_str());
+
+    Serial.println(coapServer.toString());
+    Serial.println(serverCoap.substring(serverCoap.indexOf(":")+1, serverCoap.length()));
+    Serial.println(coapPort);
 
     Serial.println("-------------------------");
-    if (_dnsServer.start((const byte)53, _serverIp)) {
+    if (_dnsServer.start((const byte)53, coapServer, coapPort)) {
       Serial.println("DNS server started");
     }
     Serial.println("-------------------------");
@@ -195,23 +197,9 @@ void registerMyIp( void * pvParameters ){
   } 
 }
 
-char *prepareServerName(const char *port) {
-  char *serverName;
-  serverName = (char *)malloc(
-    strlen((char *)"http://") + strlen(_serverIp.toString().c_str()) + strlen((char *)":") + strlen(port) + 1);
-  strcpy(serverName, (char *)"http://");
-  strcat(serverName, _serverIp.toString().c_str());
-  strcat(serverName, (char *)":");
-  strcat(serverName, port);
-
-  return serverName;
-}
-
-
 String announceServerMyIp(IPAddress &newIp) {
-  char *baseServerName = prepareServerName(_serverAuthPort);
   String pathAndParams = "/tap-in?token=" + String(_settings.token) + "&ip=" + newIp.toString();
-  String serverName = String(baseServerName) + pathAndParams;
+  String serverName = "http://" + String(_settings.server_auth) + pathAndParams;
 
   HTTPClient http;
   http.begin(serverName.c_str());
@@ -227,18 +215,16 @@ String announceServerMyIp(IPAddress &newIp) {
   }
 
   http.end();
-  free(baseServerName);
 
   return payload;
 }
 
 
 IPAddress localIp() {
-  char *serverName = prepareServerName(_serverIpAskPort);
   IPAddress ip ;
 
   HTTPClient http;
-  http.begin(serverName);
+  http.begin("http://" + String(_settings.server_whoami));
 
   int httpResponseCode = http.GET();
 
@@ -250,7 +236,6 @@ IPAddress localIp() {
   }
 
   http.end();
-  free(serverName);
 
   return ip;
 }
@@ -262,17 +247,36 @@ void handle_notFound() {
 }
 
 void handle_index() {
-  String index = "<!DOCTYPE html> <html lang='en'> <head> <meta charset='UTF-8'> <title>Theos DNS</title> <style> html { font-family: Helvetica, sans-serif; display: inline-block; margin: 0 auto; text-align: center; color: #a9a9a9; } body { font-size: 3rem; display: flex; flex-direction: column; align-items: center; background-color: #222222; overflow-x: hidden; } h1 { color: #a9a9a9; margin: 50px auto 30px; } h3 { color: #a9a9a9; margin-bottom: 50px; } p { font-size: 14px; color: #888; margin-bottom: 10px; } .button { display: block; width: 200px; background-color: #1abc9c; border: none; color: white; padding: 13px 30px; text-decoration: none; font-size: 2rem; margin: 0 auto 35px; cursor: pointer; border-radius: 4px; } input[type=text] { border: 2px solid #aaa; border-radius: 4px; margin: 8px 0; outline: none; padding: 8px; box-sizing: border-box; transition: .3s; background: #222222; color: #a9a9a9; font-size: 2.5rem; max-width: 500px; width: 500px; } input[type=text]:focus { border-color: #1abc9c; box-shadow: 0 0 8px 0 #1abc9c; } .content-center-row { display: flex; flex-direction: row; align-content: center; justify-content: center; } label { white-space: nowrap; text-align: center; display: flex; align-items: center; width: 100%; font-size: 2rem; } .space-x-4 > * { margin-right: 1rem; } a{ color: #1abc9c; } </style> </head> <body> <h1>Theos DNS</h1> <h3> <span>Support: </span> <a target='_blank' href='https://t.me/theos_dns'>@theos_dns</a> </h3> <div style='width: 90%;margin-bottom: 100px'> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='server_ip'>Server IP:</label> <input id='server_ip' type='text' placeholder='111.111.111.111' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='token'>Token:</label> <input id='token' type='text' placeholder='xxxxxxxxxxxxxx' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='wifi_ssid'>Wifi ssid:</label> <input id='wifi_ssid' type='text' placeholder='my wifi' required> </div> <div class='content-center-row space-x-4' style=''> <label for='wifi_password'>Wifi Password:</label> <input id='wifi_password' type='text' placeholder='p@ssw0rd' required> </div> </div> <button class='button' onclick='onSubmit()'>Submit</button> <script> function onSubmit() { let formData = new FormData(); formData.append('serverIp', document.getElementById('server_ip').value); formData.append('token', document.getElementById('token').value); formData.append('ssid', document.getElementById('wifi_ssid').value); formData.append('password', document.getElementById('wifi_password').value); fetch('/saveSettings', { method: 'POST', body: formData }).then((res)=>{ res.text().then(result=>{ alert(result); if(result === 'ok'){ document.body.innerHTML = 'Ok'; } }) }); } </script> </body> </html>";
+  String index = "<!DOCTYPE html> <html lang='en'> <head> <meta charset='UTF-8'> <title>Theos DNS</title> <style> html { font-family: Helvetica, sans-serif; display: inline-block; margin: 0 auto; text-align: center; color: #a9a9a9; } body { font-size: 3rem; display: flex; flex-direction: column; align-items: center; background-color: #222222; overflow-x: hidden; } h1 { color: #a9a9a9; margin: 50px auto 30px; } h3 { color: #a9a9a9; margin-bottom: 50px; } p { font-size: 14px; color: #888; margin-bottom: 10px; } .button { display: block; width: 200px; background-color: #1abc9c; border: none; color: white; padding: 13px 30px; text-decoration: none; font-size: 2rem; margin: 0 auto 35px; cursor: pointer; border-radius: 4px; } input[type=text] { border: 2px solid #aaa; border-radius: 4px; margin: 8px 0; outline: none; padding: 8px; box-sizing: border-box; transition: .3s; background: #222222; color: #a9a9a9; font-size: 2.5rem; max-width: 500px; width: 500px; } input[type=text]:focus { border-color: #1abc9c; box-shadow: 0 0 8px 0 #1abc9c; } .content-center-row { display: flex; flex-direction: row; align-content: center; justify-content: center; } label { white-space: nowrap; text-align: center; display: flex; align-items: center; width: 100%; font-size: 2rem; } .space-x-4 > * { margin-right: 1rem; } a{ color: #1abc9c; } </style> </head> <body> <h1>Theos DNS</h1> <h3> <span>Support: </span> <a target='_blank' href='https://t.me/theos_dns'>@theos_dns</a> </h3> <div style='width: 90%;margin-bottom: 100px'> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='share_link'>Share Link:</label> <input id='share_link' type='text'> </div> <button class='button' onclick='onParseLink()'>parse link</button> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='auth_server'>Auth Server:</label> <input id='auth_server' type='text' placeholder='111.111.111.111:82' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='whoami_server'>Whoami Server:</label> <input id='whoami_server' type='text' placeholder='111.111.111.111:81' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='coap_server'>COAP Server:</label> <input id='coap_server' type='text' placeholder='111.111.111.111:85' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='token'>Token:</label> <input id='token' type='text' placeholder='xxxxxxxxxxxxxx' required> </div> <div class='content-center-row space-x-4' style='margin-bottom: 10px'> <label for='wifi_ssid'>Wifi ssid:</label> <input id='wifi_ssid' type='text' placeholder='my wifi' required> </div> <div class='content-center-row space-x-4' style=''> <label for='wifi_password'>Wifi Password:</label> <input id='wifi_password' type='text' placeholder='p@ssw0rd' required> </div> </div> <button class='button' onclick='onSubmit()'>Submit</button> <script> function onParseLink(){ [ document.getElementById('auth_server').value, document.getElementById('whoami_server').value, document.getElementById('coap_server').value, document.getElementById('token').value, document.getElementById('wifi_ssid').value, document.getElementById('wifi_password').value ] = document.getElementById('share_link').value.split('@#@') } function onSubmit() { let formData = new FormData(); formData.append('serverAuth', document.getElementById('auth_server').value); formData.append('serverWhoami', document.getElementById('whoami_server').value); formData.append('serverCoap', document.getElementById('coap_server').value); formData.append('token', document.getElementById('token').value); formData.append('ssid', document.getElementById('wifi_ssid').value); formData.append('password', document.getElementById('wifi_password').value); fetch('/saveSettings', { method: 'POST', body: formData }).then((res)=>{ res.text().then(result=>{ alert(result); if(result === 'ok'){ document.body.innerHTML = 'Ok'; } }) }); } </script> </body> </html>";
   _server.send(200, "text/html", index);
 }
 
 void handle_saveSettings() {
   if (
-    !_server.hasArg("token") || !_server.hasArg("serverIp") || !_server.hasArg("ssid") || !_server.hasArg("ssid") || _server.arg("token") == NULL || _server.arg("serverIp") == NULL || _server.arg("ssid") == NULL || _server.arg("password") == NULL || sizeof(_server.arg("token")) >= 32 || sizeof(_server.arg("serverIp")) >= 32 || sizeof(_server.arg("ssid")) >= 32 || sizeof(_server.arg("password")) >= 32) {
+    !_server.hasArg("token") ||
+    !_server.hasArg("serverAuth") ||
+    !_server.hasArg("serverWhoami") ||
+    !_server.hasArg("serverCoap") ||
+    !_server.hasArg("ssid") ||
+    !_server.hasArg("ssid") ||
+    _server.arg("token") == NULL ||
+    _server.arg("serverAuth") == NULL ||
+    _server.arg("serverWhoami") == NULL ||
+    _server.arg("serverCoap") == NULL ||
+    _server.arg("ssid") == NULL ||
+    _server.arg("password") == NULL ||
+    sizeof(_server.arg("token")) >= 32 ||
+    sizeof(_server.arg("serverAuth")) >= 32 ||
+    sizeof(_server.arg("serverWhoami")) >= 32 ||
+    sizeof(_server.arg("serverCoap")) >= 32 ||
+    sizeof(_server.arg("ssid")) >= 32 || 
+    sizeof(_server.arg("password")) >= 32) {
     _server.send(400, "text/plain", "400: Invalid Request");
     return;
   }
-  strcpy(_settings.server_ip, _server.arg("serverIp").c_str());
+  strcpy(_settings.server_auth, _server.arg("serverAuth").c_str());
+  strcpy(_settings.server_whoami, _server.arg("serverWhoami").c_str());
+  strcpy(_settings.server_coap, _server.arg("serverCoap").c_str());
   strcpy(_settings.token, _server.arg("token").c_str());
   strcpy(_settings.WIFI_ssid, _server.arg("ssid").c_str());
   strcpy(_settings.WIFI_password, _server.arg("password").c_str());

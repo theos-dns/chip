@@ -12,9 +12,6 @@
 #define DNS_QR_RESPONSE 1
 #define DNS_OPCODE_QUERY 0
 
-#define COAP_SERVER_PORT 5688
-
-
 enum class DNSReplyCode : unsigned char
 {
   NoError = 0,
@@ -73,7 +70,7 @@ class DNSServer
   public:
     DNSServer();
     void setTTL(const uint32_t &ttl);
-    bool start(const uint16_t port, IPAddress &upstream_doh);
+    bool start(const uint16_t port, IPAddress &upstream_coap_server, uint16_t upstream_coap_port);
     void stop();
     void checkToResponse();
     void setCOAP(Coap *coap);
@@ -83,7 +80,8 @@ class DNSServer
     AsyncUDP _udp;
     uint32_t _ttl;
     DNSReplyCode _errorReplyCodeDefault;
-    IPAddress _upstream_doh;
+    IPAddress _upstream_coap_server;
+    uint16_t _upstream_coap_port;
     Coap *_coap;
     bool _isStarted;
 
